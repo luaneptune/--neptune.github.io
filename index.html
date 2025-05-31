@@ -17,10 +17,350 @@
 <body>
     <div id="root"></div>
 
-    <!--
-        BELANGRIJK: De React-code die ik hierna geef, wordt door het Canvas-systeem
-        automatisch hieronder geïnjecteerd in de gebundelde JavaScript-vorm.
-        Je hoeft hier GEEN <script src="..."></script> tag voor je React-app toe te voegen.
-    -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        // Context voor Firebase en Gebruikersstatus
+        const FirebaseContext = React.createContext(null);
+
+        // Custom Modal Component
+        const Modal = ({ message, onClose }) => {
+          if (!message) return null;
+
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg p-6 shadow-xl max-w-sm w-full">
+                <p className="text-gray-800 text-lg mb-4">{message}</p>
+                <button
+                  onClick={onClose}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition duration-150 ease-in-out"
+                >
+                  Sluiten
+                </button>
+              </div>
+            </div>
+          );
+        };
+
+        // Component voor Login en Registratie
+        const AuthForm = () => {
+          const [isRegistering, setIsRegistering] = React.useState(false);
+          const [email, setEmail] = React.useState('');
+          const [password, setPassword] = React.useState('');
+          const [errorMessage, setErrorMessage] = React.useState('');
+          const { auth, db, appId } = React.useContext(FirebaseContext);
+
+          const handleAuthAction = async (e) => {
+            e.preventDefault();
+            setErrorMessage('');
+            try {
+              if (isRegistering) {
+                // Registreren
+                const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                // Sla basis gebruikersinformatie op in Firestore
+                const userDocRef = firebase.firestore().doc(db, `artifacts/${appId}/users/${user.uid}/profile`, 'data');
+                await firebase.firestore().setDoc(userDocRef, {
+                  email: user.email,
+                  createdAt: new Date().toISOString(),
+                  userId: user.uid // Sla userId ook op in het document
+                });
+              } else {
+                // Inloggen
+                await firebase.auth().signInWithEmailAndPassword(email, password);
+              }
+            } catch (error) {
+              console.error("Authenticatie fout:", error);
+              setErrorMessage(error.message);
+            }
+          };
+
+          return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 sm:p-6">
+              <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-6 sm:p-8">
+                <h2 className="text-3xl font-extrabold text-gray-900 text-center mb-6">
+                  {isRegistering ? 'Registreren' : 'Inloggen'}
+                </h2>
+                <form onSubmit={handleAuthAction} className="space-y-6">
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                      E-mailadres
+                    </label>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                      Wachtwoord
+                    </label>
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                  </div>
+                  {errorMessage && (
+                    <p className="text-red-600 text-sm text-center">{errorMessage}</p>
+                  )}
+                  <div>
+                    <button
+                      type="submit"
+                      className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
+                    >
+                      {isRegistering ? 'Registreren' : 'Inloggen'}
+                    </button>
+                  </div>
+                </form>
+                <div className="mt-6 text-center">
+                  <button
+                    onClick={() => setIsRegistering(!isRegistering)}
+                    className="text-indigo-600 hover:text-indigo-500 text-base font-medium"
+                  >
+                    {isRegistering ? 'Heb je al een account? Log in' : 'Nog geen account? Registreer je hier'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // Component voor de Obfuscator Functionaliteit
+        const ObfuscatorPanel = () => {
+          const [inputCode, setInputCode] = React.useState('');
+          const [outputCode, setOutputCode] = React.useState('');
+          const [isLoading, setIsLoading] = React.useState(false);
+          const [modalMessage, setModalMessage] = React.useState('');
+          const { auth, userId } = React.useContext(FirebaseContext);
+
+          const handleObfuscate = async () => {
+            setIsLoading(true);
+            setOutputCode('');
+            try {
+              // De URL van je Pterodactyl server API
+              const pterodactylApiUrl = 'http://thor.pylex.software:12111/obfuscate';
+
+              const response = await fetch(pterodactylApiUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  // Voeg hier eventueel authenticatie headers toe als je backend die vereist
+                },
+                body: JSON.stringify({ code: inputCode }),
+              });
+
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Fout bij het obfuscaten van de code.');
+              }
+
+              const data = await response.json();
+              setOutputCode(data.obfuscatedCode); // Zorg ervoor dat je backend 'obfuscatedCode' teruggeeft
+            } catch (error) {
+              console.error("Obfuscatie fout:", error);
+              setModalMessage(`Fout: ${error.message}`);
+            } finally {
+              setIsLoading(false);
+            }
+          };
+
+          const copyToClipboard = () => {
+            if (outputCode) {
+              // Gebruik document.execCommand('copy') voor bredere compatibiliteit in iframes
+              const textarea = document.createElement('textarea');
+              textarea.value = outputCode;
+              document.body.appendChild(textarea);
+              textarea.select();
+              try {
+                document.execCommand('copy');
+                setModalMessage('Geobfusceerde code gekopieerd naar klembord!');
+              } catch (err) {
+                console.error('Kon niet kopiëren naar klembord:', err);
+                setModalMessage('Kopiëren naar klembord mislukt.');
+              }
+              document.body.removeChild(textarea);
+            }
+          };
+
+          const handleLogout = async () => {
+            try {
+              await firebase.auth().signOut(auth);
+            } catch (error) {
+              console.error("Uitloggen fout:", error);
+              setModalMessage(`Fout bij uitloggen: ${error.message}`);
+            }
+          };
+
+          return (
+            <div className="flex flex-col items-center min-h-screen bg-gray-100 p-4 sm:p-6">
+              <Modal message={modalMessage} onClose={() => setModalMessage('')} />
+
+              <div className="w-full max-w-4xl bg-white rounded-lg shadow-xl p-6 sm:p-8 mb-6">
+                <h2 className="text-3xl font-extrabold text-gray-900 text-center mb-4">Lua Obfuscator</h2>
+                {userId && (
+                  <p className="text-sm text-gray-600 text-center mb-4">
+                    Ingelogd als: <span className="font-semibold break-all">{userId}</span>
+                  </p>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <label htmlFor="inputCode" className="block text-sm font-medium text-gray-700 mb-2">
+                      Invoer Lua Code
+                    </label>
+                    <textarea
+                      id="inputCode"
+                      className="w-full h-64 p-4 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm resize-y"
+                      placeholder="Plaats hier je Lua code..."
+                      value={inputCode}
+                      onChange={(e) => setInputCode(e.target.value)}
+                    ></textarea>
+                  </div>
+                  <div>
+                    <label htmlFor="outputCode" className="block text-sm font-medium text-gray-700 mb-2">
+                      Geobfusceerde Code
+                    </label>
+                    <textarea
+                      id="outputCode"
+                      className="w-full h-64 p-4 border border-gray-300 rounded-md shadow-sm bg-gray-50 font-mono text-sm resize-y"
+                      placeholder="Geobfusceerde code verschijnt hier..."
+                      value={outputCode}
+                      readOnly
+                    ></textarea>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row justify-center gap-4 mb-6">
+                  <button
+                    onClick={handleObfuscate}
+                    disabled={isLoading || !inputCode.trim()}
+                    className="flex-1 min-w-[150px] py-3 px-6 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? 'Bezig met obfuscaten...' : 'Obfuscate Code'}
+                  </button>
+                  <button
+                    onClick={copyToClipboard}
+                    disabled={!outputCode}
+                    className="flex-1 min-w-[150px] py-3 px-6 border border-transparent rounded-md shadow-sm text-lg font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Kopieer naar Klembord
+                  </button>
+                </div>
+
+                <div className="text-center">
+                  <button
+                    onClick={handleLogout}
+                    className="text-red-600 hover:text-red-500 text-base font-medium mt-4"
+                  >
+                    Uitloggen
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // Hoofd Applicatie Component
+        function App() {
+          const [firebaseInitialized, setFirebaseInitialized] = React.useState(false);
+          const [auth, setAuth] = React.useState(null);
+          const [db, setDb] = React.useState(null);
+          const [user, setUser] = React.useState(null);
+          const [userId, setUserId] = React.useState(null);
+          const [appId, setAppId] = React.useState('');
+
+          React.useEffect(() => {
+            const initializeFirebase = async () => {
+              try {
+                // Haal app ID op
+                const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                setAppId(currentAppId);
+
+                // Haal Firebase config op
+                const firebaseConfig = typeof __firebase_config !== 'undefined'
+                  ? JSON.parse(__firebase_config)
+                  : {};
+
+                // Initialiseer Firebase app
+                const firebaseApp = firebase.initializeApp(firebaseConfig);
+                const authInstance = firebase.auth(firebaseApp);
+                const dbInstance = firebase.firestore(firebaseApp);
+
+                setAuth(authInstance);
+                setDb(dbInstance);
+
+                // Meld aan met custom token of anoniem
+                if (typeof __initial_auth_token !== 'undefined') {
+                  await authInstance.signInWithCustomToken(__initial_auth_token);
+                } else {
+                  await authInstance.signInAnonymously();
+                }
+
+                // Luister naar authenticatiestatus wijzigingen
+                const unsubscribe = authInstance.onAuthStateChanged((currentUser) => {
+                  setUser(currentUser);
+                  if (currentUser) {
+                    setUserId(currentUser.uid);
+                    // Optioneel: Luister naar gebruikersprofiel updates
+                    const userDocRef = dbInstance.doc(`artifacts/${currentAppId}/users/${currentUser.uid}/profile`, 'data');
+                    dbInstance.onSnapshot(userDocRef, (docSnap) => {
+                      if (docSnap.exists()) {
+                        console.log("Gebruikersprofiel data:", docSnap.data());
+                      } else {
+                        console.log("Geen gebruikersprofiel data voor deze gebruiker.");
+                      }
+                    });
+                  } else {
+                    setUserId(null);
+                  }
+                  setFirebaseInitialized(true); // Firebase is nu geïnitialiseerd en auth state is gecontroleerd
+                });
+
+                // Cleanup functie
+                return () => unsubscribe();
+
+              } catch (error) {
+                console.error("Fout bij het initialiseren van Firebase:", error);
+                setFirebaseInitialized(true); // Probeer niet opnieuw te initialiseren bij fout
+              }
+            };
+
+            initializeFirebase();
+          }, []); // Lege afhankelijkheidsarray betekent dat dit maar één keer wordt uitgevoerd
+
+          if (!firebaseInitialized) {
+            return (
+              <div className="flex items-center justify-center min-h-screen bg-gray-100">
+                <div className="text-xl font-semibold text-gray-700">Laden...</div>
+              </div>
+            );
+          }
+
+          return (
+            <FirebaseContext.Provider value={{ auth, db, user, userId, appId }}>
+              <div className="font-sans antialiased text-gray-900">
+                {user ? <ObfuscatorPanel /> : <AuthForm />}
+              </div>
+            </FirebaseContext.Provider>
+          );
+        }
+
+        // Render de React-applicatie in de 'root' div
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
 </body>
 </html>
