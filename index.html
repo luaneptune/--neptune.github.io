@@ -7,7 +7,12 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="root"></div>
+    <div class="container">
+        <h1>Neptune Obfuscator</h1>
+        <textarea id="luaCode" placeholder="Voer je Lua-code in..."></textarea>
+        <button onclick="obfuscateCode()">Obfuscate</button>
+        <pre id="output"></pre>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
