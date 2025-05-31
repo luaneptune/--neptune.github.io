@@ -53,26 +53,44 @@
           const [email, setEmail] = React.useState('');
           const [password, setPassword] = React.useState('');
           const [errorMessage, setErrorMessage] = React.useState('');
+          const [modalMessage, setModalMessage] = React.useState(''); // Voor algemene berichten
           const { auth, db, appId } = React.useContext(FirebaseContext);
 
           const handleAuthAction = async (e) => {
             e.preventDefault();
             setErrorMessage('');
+            setModalMessage('');
             try {
               if (isRegistering) {
                 // Registreren
                 const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
                 const user = userCredential.user;
+
+                // Verstuur verificatie-e-mail
+                await user.sendEmailVerification();
+                setModalMessage('Registratie succesvol! Controleer je e-mail (inclusief spam) voor een verificatielink.');
+
                 // Sla basis gebruikersinformatie op in Firestore
                 const userDocRef = firebase.firestore().doc(db, `artifacts/${appId}/users/${user.uid}/profile`, 'data');
                 await firebase.firestore().setDoc(userDocRef, {
                   email: user.email,
                   createdAt: new Date().toISOString(),
-                  userId: user.uid // Sla userId ook op in het document
+                  userId: user.uid,
+                  emailVerified: user.emailVerified // Sla de verificatiestatus op
                 });
+
               } else {
                 // Inloggen
-                await firebase.auth().signInWithEmailAndPassword(email, password);
+                const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+
+                if (!user.emailVerified) {
+                  // Als e-mail niet geverifieerd is, log uit en toon een bericht
+                  await firebase.auth().signOut(auth);
+                  setModalMessage('Je e-mailadres is nog niet geverifieerd. Controleer je inbox voor de verificatielink.');
+                  return;
+                }
+                // Als e-mail geverifieerd is, gaat de gebruiker door naar het ObfuscatorPanel
               }
             } catch (error) {
               console.error("Authenticatie fout:", error);
@@ -80,8 +98,27 @@
             }
           };
 
+          const handleResendVerification = async () => {
+            setErrorMessage('');
+            setModalMessage('');
+            try {
+              const currentUser = firebase.auth().currentUser;
+              if (currentUser) {
+                await currentUser.sendEmailVerification();
+                setModalMessage('Verificatie-e-mail opnieuw verstuurd! Controleer je inbox.');
+              } else {
+                setErrorMessage('Je moet ingelogd zijn om een verificatie-e-mail opnieuw te versturen.');
+              }
+            } catch (error) {
+              console.error("Fout bij opnieuw versturen verificatie-e-mail:", error);
+              setErrorMessage(error.message);
+            }
+          };
+
           return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 sm:p-6">
+              <Modal message={modalMessage} onClose={() => setModalMessage('')} />
+
               <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-6 sm:p-8">
                 <h2 className="text-3xl font-extrabold text-gray-900 text-center mb-6">
                   {isRegistering ? 'Registreren' : 'Inloggen'}
@@ -129,13 +166,21 @@
                     </button>
                   </div>
                 </form>
-                <div className="mt-6 text-center">
+                <div className="mt-6 text-center space-y-3">
                   <button
                     onClick={() => setIsRegistering(!isRegistering)}
-                    className="text-indigo-600 hover:text-indigo-500 text-base font-medium"
+                    className="text-indigo-600 hover:text-indigo-500 text-base font-medium block w-full"
                   >
                     {isRegistering ? 'Heb je al een account? Log in' : 'Nog geen account? Registreer je hier'}
                   </button>
+                  {!isRegistering && ( // Toon deze knop alleen als je niet aan het registreren bent
+                    <button
+                      onClick={handleResendVerification}
+                      className="text-gray-600 hover:text-gray-500 text-sm font-medium block w-full"
+                    >
+                      Verificatie-e-mail opnieuw versturen
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -353,10 +398,13 @@
             );
           }
 
+          // Render AuthForm als er geen gebruiker is, of als de e-mail niet geverifieerd is
+          const shouldShowAuthForm = !user || !user.emailVerified;
+
           return (
             <FirebaseContext.Provider value={{ auth, db, user, userId, appId }}>
               <div className="font-sans antialiased text-gray-900">
-                {user ? <ObfuscatorPanel /> : <AuthForm />}
+                {shouldShowAuthForm ? <AuthForm /> : <ObfuscatorPanel />}
               </div>
             </FirebaseContext.Provider>
           );
