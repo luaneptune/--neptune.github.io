@@ -99,8 +99,7 @@
 
                 if (!user.emailVerified) {
                   // Als e-mail niet geverifieerd is, log uit en toon een bericht
-                  // CORRECTIE: signOut() verwacht geen argumenten
-                  await firebase.auth().signOut();
+                  await firebase.auth().signOut(); // Correctie: signOut() verwacht geen argumenten
                   setModalMessage('Je e-mailadres is nog niet geverifieerd. Controleer je inbox voor de verificatielink.');
                   console.log("Inlog mislukt: E-mail niet geverifieerd.");
                   return;
