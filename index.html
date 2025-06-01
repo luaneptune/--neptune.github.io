@@ -334,14 +334,21 @@
           React.useEffect(() => {
             const initializeFirebase = async () => {
               try {
-                // Haal app ID op
-                const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                // JOUW FIREBASE CONFIGURATIE - NU DIRECT IN DE CODE GEPLAATST
+                const yourFirebaseConfig = {
+                  apiKey: "AIzaSyCrQ6k4GNPueEYnTZlbG-pJv4bgzFxPXtY",
+                  authDomain: "lua-neptune.firebaseapp.com",
+                  projectId: "lua-neptune",
+                  storageBucket: "lua-neptune.firebasestorage.app",
+                  messagingSenderId: "966996805551",
+                  appId: "1:966996805551:web:a343351f3d43cc9e52115a",
+                  measurementId: "G-JWQ7ZBDZN7"
+                };
+
+                const currentAppId = yourFirebaseConfig.appId; // Gebruik je eigen appId
                 setAppId(currentAppId);
 
-                // Haal Firebase config op
-                const firebaseConfig = typeof __firebase_config !== 'undefined'
-                  ? JSON.parse(__firebase_config)
-                  : {};
+                const firebaseConfig = yourFirebaseConfig; // Gebruik je eigen config
 
                 // Initialiseer Firebase app
                 const firebaseApp = firebase.initializeApp(firebaseConfig);
@@ -350,13 +357,6 @@
 
                 setAuth(authInstance);
                 setDb(dbInstance);
-
-                // Meld aan met custom token of anoniem
-                if (typeof __initial_auth_token !== 'undefined') {
-                  await authInstance.signInWithCustomToken(__initial_auth_token);
-                } else {
-                  await authInstance.signInAnonymously();
-                }
 
                 // Luister naar authenticatiestatus wijzigingen
                 const unsubscribe = authInstance.onAuthStateChanged((currentUser) => {
@@ -399,7 +399,7 @@
           }
 
           // Render AuthForm als er geen gebruiker is, of als de e-mail niet geverifieerd is
-          const shouldShowAuthForm = !user || !user.emailVerified;
+          const shouldShowAuthForm = !user || (user && !user.emailVerified);
 
           return (
             <FirebaseContext.Provider value={{ auth, db, user, userId, appId }}>
