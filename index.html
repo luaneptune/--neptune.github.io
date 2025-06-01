@@ -92,6 +92,7 @@
                 const user = userCredential.user;
 
                 // Forceer een herlading van het gebruikersobject om de meest recente status te krijgen
+                // Dit is cruciaal na e-mailverificatie
                 await user.reload();
                 console.log("Gebruiker ingelogd, na reload:", user.uid, "emailVerified:", user.emailVerified);
 
@@ -377,12 +378,16 @@
                 setAuth(authInstance);
                 setDb(dbInstance);
 
-                const unsubscribe = authInstance.onAuthStateChanged((currentUser) => {
+                const unsubscribe = authInstance.onAuthStateChanged(async (currentUser) => { // Maak async om reload te kunnen awaiten
                   console.log("onAuthStateChanged triggered. Current user:", currentUser);
                   setUser(currentUser);
                   if (currentUser) {
                     setUserId(currentUser.uid);
-                    // Controleer de e-mailverificatiestatus direct hier
+                    // Forceer een herlading van het gebruikersobject wanneer de authenticatiestatus verandert
+                    // Dit helpt om de meest recente emailVerified status te krijgen na een refresh of verificatie
+                    await currentUser.reload();
+                    console.log("User reloaded in onAuthStateChanged:", currentUser.uid, "emailVerified:", currentUser.emailVerified);
+
                     if (!currentUser.emailVerified) {
                       setAuthFormMessage('Je e-mailadres is nog niet geverifieerd. Log in en klik op "Verificatie-e-mail opnieuw versturen" als je de link kwijt bent.');
                       console.log("Gebruiker ingelogd maar e-mail niet geverifieerd:", currentUser.uid);
