@@ -262,7 +262,8 @@
 
           const handleLogout = async () => {
             try {
-              await firebase.auth().signOut(auth);
+              // CORRECTIE: signOut() verwacht geen argumenten
+              await firebase.auth().signOut();
             } catch (error) {
               console.error("Uitloggen fout:", error);
               setModalMessage(`Fout bij uitloggen: ${error.message}`);
