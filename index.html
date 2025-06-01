@@ -109,7 +109,38 @@
               }
             } catch (error) {
               console.error("Authenticatie fout:", error);
-              setErrorMessage(error.message);
+              let userFriendlyMessage = 'Er is een onbekende fout opgetreden. Probeer het opnieuw.';
+              // Verbeterde foutafhandeling
+              switch (error.code) {
+                case 'auth/invalid-email':
+                  userFriendlyMessage = 'Ongeldig e-mailadres. Controleer het formaat.';
+                  break;
+                case 'auth/user-disabled':
+                  userFriendlyMessage = 'Dit account is uitgeschakeld.';
+                  break;
+                case 'auth/user-not-found':
+                case 'auth/wrong-password':
+                  userFriendlyMessage = 'Ongeldig e-mailadres of wachtwoord.';
+                  break;
+                case 'auth/email-already-in-use':
+                  userFriendlyMessage = 'Dit e-mailadres is al geregistreerd.';
+                  break;
+                case 'auth/weak-password':
+                  userFriendlyMessage = 'Het wachtwoord is te zwak (minimaal 6 tekens).';
+                  break;
+                case 'auth/network-request-failed':
+                  userFriendlyMessage = 'Netwerkfout. Controleer je internetverbinding.';
+                  break;
+                default:
+                  // Voor generieke API-fouten zoals die je eerder zag
+                  if (error.message && typeof error.message === 'string' && error.message.includes("INVALID_LOGIN_CREDENTIALS")) {
+                      userFriendlyMessage = 'Ongeldig e-mailadres of wachtwoord.';
+                  } else {
+                      userFriendlyMessage = `Fout: ${error.message}`; // Toon de originele foutmelding als deze niet herkend wordt
+                  }
+                  break;
+              }
+              setErrorMessage(userFriendlyMessage);
             }
           };
 
@@ -263,7 +294,6 @@
 
           const handleLogout = async () => {
             try {
-              // CORRECTIE: signOut() verwacht geen argumenten
               await firebase.auth().signOut();
             } catch (error) {
               console.error("Uitloggen fout:", error);
