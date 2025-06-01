@@ -16,13 +16,13 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
     <div id="root"></div>
-
-    <script crossorigin src="https://unpkg.com/react@18/umd/react-dom.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <script type="text/babel">
         // Context voor Firebase en Gebruikersstatus
@@ -99,7 +99,8 @@
 
                 if (!user.emailVerified) {
                   // Als e-mail niet geverifieerd is, log uit en toon een bericht
-                  await firebase.auth().signOut(auth);
+                  // CORRECTIE: signOut() verwacht geen argumenten
+                  await firebase.auth().signOut();
                   setModalMessage('Je e-mailadres is nog niet geverifieerd. Controleer je inbox voor de verificatielink.');
                   console.log("Inlog mislukt: E-mail niet geverifieerd.");
                   return;
@@ -410,7 +411,7 @@
 
                 const unsubscribe = authInstance.onAuthStateChanged(async (initialUser) => {
                   console.log("onAuthStateChanged triggered. Initial user:", initialUser);
-                  let currentUserState = initialUser; // Gebruik deze variabele voor de huidige staat in de listener
+                  let currentUserState = initialUser;
 
                   if (initialUser) {
                     // Forceer een herlading van het gebruikersobject om de meest recente status te krijgen
