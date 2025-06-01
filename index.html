@@ -20,8 +20,8 @@
 <body>
     <div id="root"></div>
 
+    <script crossorigin src="https://unpkg.com/react@18/umd/react-dom.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <script type="text/babel">
@@ -408,32 +408,33 @@
                 setAuth(authInstance);
                 setDb(dbInstance);
 
-                const unsubscribe = authInstance.onAuthStateChanged(async (initialUser) => { // Gebruik initialUser
+                const unsubscribe = authInstance.onAuthStateChanged(async (initialUser) => {
                   console.log("onAuthStateChanged triggered. Initial user:", initialUser);
-                  let updatedUser = initialUser; // Start met de initiële gebruiker
+                  let currentUserState = initialUser; // Gebruik deze variabele voor de huidige staat in de listener
 
                   if (initialUser) {
                     // Forceer een herlading van het gebruikersobject om de meest recente status te krijgen
+                    // Dit is cruciaal na e-mailverificatie of een refresh
                     await initialUser.reload();
-                    updatedUser = firebase.auth().currentUser; // Haal de herladen gebruiker op van de auth instantie
-                    console.log("User reloaded in onAuthStateChanged:", updatedUser.uid, "emailVerified:", updatedUser.emailVerified);
+                    currentUserState = firebase.auth().currentUser; // Haal de herladen gebruiker op van de auth instantie
+                    console.log("User reloaded in onAuthStateChanged:", currentUserState.uid, "emailVerified:", currentUserState.emailVerified);
                   }
 
                   // Stel de gebruikersstatus in met de mogelijk herladen gebruiker
-                  setUser(updatedUser);
-                  setUserId(updatedUser ? updatedUser.uid : null); // Update userId gebaseerd op updatedUser
+                  setUser(currentUserState);
+                  setUserId(currentUserState ? currentUserState.uid : null); // Update userId gebaseerd op currentUserState
 
-                  if (updatedUser && !updatedUser.emailVerified) {
+                  if (currentUserState && !currentUserState.emailVerified) {
                     setAuthFormMessage('Je e-mailadres is nog niet geverifieerd. Log in en klik op "Verificatie-e-mail opnieuw versturen" als je de link kwijt bent.');
-                    console.log("Gebruiker ingelogd maar e-mail niet geverifieerd:", updatedUser.uid);
+                    console.log("Gebruiker ingelogd maar e-mail niet geverifieerd:", currentUserState.uid);
                   } else {
                     setAuthFormMessage(''); // Geen bericht als alles ok is
-                    console.log("Gebruiker ingelogd en e-mail geverifieerd:", updatedUser ? updatedUser.uid : 'N/A');
+                    console.log("Gebruiker ingelogd en e-mail geverifieerd:", currentUserState ? currentUserState.uid : 'N/A');
                   }
 
-                  // Firestore snapshot logic (alleen als updatedUser bestaat)
-                  if (updatedUser) {
-                    const userDocRef = dbInstance.doc(`artifacts/${currentAppId}/users/${updatedUser.uid}/profile`, 'data');
+                  // Firestore snapshot logic (alleen als currentUserState bestaat)
+                  if (currentUserState) {
+                    const userDocRef = dbInstance.doc(`artifacts/${currentAppId}/users/${currentUserState.uid}/profile`, 'data');
                     dbInstance.onSnapshot(userDocRef, (docSnap) => {
                       if (docSnap.exists()) {
                         console.log("Gebruikersprofiel data:", docSnap.data());
@@ -444,6 +445,7 @@
                   } else {
                     console.log("Geen gebruiker ingelogd.");
                   }
+                  // Zet firebaseInitialized op true NADAT alle checks en reloads zijn voltooid
                   setFirebaseInitialized(true);
                 });
 
@@ -451,12 +453,12 @@
 
               } catch (error) {
                 console.error("Fout bij het initialiseren van Firebase:", error);
-                setFirebaseInitialized(true);
+                setFirebaseInitialized(true); // Zorg ervoor dat de app niet vastloopt bij een init-fout
               }
             };
 
             initializeFirebase();
-          }, []);
+          }, []); // Lege afhankelijkheidsarray betekent dat dit maar één keer wordt uitgevoerd
 
           if (!firebaseInitialized) {
             return (
