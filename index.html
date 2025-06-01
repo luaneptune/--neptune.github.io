@@ -48,13 +48,19 @@
         };
 
         // Component voor Login en Registratie
-        const AuthForm = () => {
+        const AuthForm = ({ initialMessage = '' }) => {
           const [isRegistering, setIsRegistering] = React.useState(false);
           const [email, setEmail] = React.useState('');
           const [password, setPassword] = React.useState('');
           const [errorMessage, setErrorMessage] = React.useState('');
-          const [modalMessage, setModalMessage] = React.useState(''); // Voor algemene berichten
+          const [modalMessage, setModalMessage] = React.useState(initialMessage); // Voor algemene berichten
           const { auth, db, appId } = React.useContext(FirebaseContext);
+
+          React.useEffect(() => {
+            if (initialMessage) {
+              setModalMessage(initialMessage);
+            }
+          }, [initialMessage]);
 
           const handleAuthAction = async (e) => {
             e.preventDefault();
@@ -68,7 +74,7 @@
 
                 // Verstuur verificatie-e-mail
                 await user.sendEmailVerification();
-                setModalMessage('Registratie succesvol! Controleer je e-mail (inclusief spam) voor een verificatielink.');
+                setModalMessage('Registratie succesvol! Controleer je e-mail (inclusief spam) voor een verificatielink. Log daarna in.');
 
                 // Sla basis gebruikersinformatie op in Firestore
                 const userDocRef = firebase.firestore().doc(db, `artifacts/${appId}/users/${user.uid}/profile`, 'data');
@@ -78,19 +84,27 @@
                   userId: user.uid,
                   emailVerified: user.emailVerified // Sla de verificatiestatus op
                 });
+                console.log("Gebruiker geregistreerd en verificatie-e-mail verstuurd:", user.uid);
 
               } else {
                 // Inloggen
                 const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
                 const user = userCredential.user;
 
+                // Forceer een herlading van het gebruikersobject om de meest recente status te krijgen
+                await user.reload();
+                console.log("Gebruiker ingelogd, na reload:", user.uid, "emailVerified:", user.emailVerified);
+
+
                 if (!user.emailVerified) {
                   // Als e-mail niet geverifieerd is, log uit en toon een bericht
                   await firebase.auth().signOut(auth);
                   setModalMessage('Je e-mailadres is nog niet geverifieerd. Controleer je inbox voor de verificatielink.');
+                  console.log("Inlog mislukt: E-mail niet geverifieerd.");
                   return;
                 }
                 // Als e-mail geverifieerd is, gaat de gebruiker door naar het ObfuscatorPanel
+                console.log("Inlog succesvol: E-mail geverifieerd.");
               }
             } catch (error) {
               console.error("Authenticatie fout:", error);
@@ -106,8 +120,10 @@
               if (currentUser) {
                 await currentUser.sendEmailVerification();
                 setModalMessage('Verificatie-e-mail opnieuw verstuurd! Controleer je inbox.');
+                console.log("Verificatie-e-mail opnieuw verstuurd voor:", currentUser.email);
               } else {
                 setErrorMessage('Je moet ingelogd zijn om een verificatie-e-mail opnieuw te versturen.');
+                console.log("Poging tot opnieuw versturen verificatie-e-mail zonder ingelogde gebruiker.");
               }
             } catch (error) {
               console.error("Fout bij opnieuw versturen verificatie-e-mail:", error);
@@ -330,6 +346,7 @@
           const [user, setUser] = React.useState(null);
           const [userId, setUserId] = React.useState(null);
           const [appId, setAppId] = React.useState('');
+          const [authFormMessage, setAuthFormMessage] = React.useState(''); // Bericht voor AuthForm
 
           React.useEffect(() => {
             const initializeFirebase = async () => {
@@ -345,12 +362,13 @@
                   measurementId: "G-JWQ7ZBDZN7"
                 };
 
-                const currentAppId = yourFirebaseConfig.appId; // Gebruik je eigen appId
+                console.log("Firebase Config being used:", yourFirebaseConfig);
+
+                const currentAppId = yourFirebaseConfig.appId;
                 setAppId(currentAppId);
 
-                const firebaseConfig = yourFirebaseConfig; // Gebruik je eigen config
+                const firebaseConfig = yourFirebaseConfig;
 
-                // Initialiseer Firebase app
                 const firebaseApp = firebase.initializeApp(firebaseConfig);
                 const authInstance = firebase.auth(firebaseApp);
                 const dbInstance = firebase.firestore(firebaseApp);
@@ -358,12 +376,20 @@
                 setAuth(authInstance);
                 setDb(dbInstance);
 
-                // Luister naar authenticatiestatus wijzigingen
                 const unsubscribe = authInstance.onAuthStateChanged((currentUser) => {
+                  console.log("onAuthStateChanged triggered. Current user:", currentUser);
                   setUser(currentUser);
                   if (currentUser) {
                     setUserId(currentUser.uid);
-                    // Optioneel: Luister naar gebruikersprofiel updates
+                    // Controleer de e-mailverificatiestatus direct hier
+                    if (!currentUser.emailVerified) {
+                      setAuthFormMessage('Je e-mailadres is nog niet geverifieerd. Log in en klik op "Verificatie-e-mail opnieuw versturen" als je de link kwijt bent.');
+                      console.log("Gebruiker ingelogd maar e-mail niet geverifieerd:", currentUser.uid);
+                    } else {
+                      setAuthFormMessage(''); // Geen bericht als alles ok is
+                      console.log("Gebruiker ingelogd en e-mail geverifieerd:", currentUser.uid);
+                    }
+
                     const userDocRef = dbInstance.doc(`artifacts/${currentAppId}/users/${currentUser.uid}/profile`, 'data');
                     dbInstance.onSnapshot(userDocRef, (docSnap) => {
                       if (docSnap.exists()) {
@@ -374,21 +400,22 @@
                     });
                   } else {
                     setUserId(null);
+                    setAuthFormMessage(''); // Reset bericht bij uitloggen
+                    console.log("Geen gebruiker ingelogd.");
                   }
-                  setFirebaseInitialized(true); // Firebase is nu geïnitialiseerd en auth state is gecontroleerd
+                  setFirebaseInitialized(true);
                 });
 
-                // Cleanup functie
                 return () => unsubscribe();
 
               } catch (error) {
                 console.error("Fout bij het initialiseren van Firebase:", error);
-                setFirebaseInitialized(true); // Probeer niet opnieuw te initialiseren bij fout
+                setFirebaseInitialized(true);
               }
             };
 
             initializeFirebase();
-          }, []); // Lege afhankelijkheidsarray betekent dat dit maar één keer wordt uitgevoerd
+          }, []);
 
           if (!firebaseInitialized) {
             return (
@@ -404,7 +431,7 @@
           return (
             <FirebaseContext.Provider value={{ auth, db, user, userId, appId }}>
               <div className="font-sans antialiased text-gray-900">
-                {shouldShowAuthForm ? <AuthForm /> : <ObfuscatorPanel />}
+                {shouldShowAuthForm ? <AuthForm initialMessage={authFormMessage} /> : <ObfuscatorPanel />}
               </div>
             </FirebaseContext.Provider>
           );
